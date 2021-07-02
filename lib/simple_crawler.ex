@@ -63,6 +63,9 @@ defmodule SimpleCrawler do
     IO.puts("Complete in #{elap} seconds")
   end
 
+  @doc """
+    Fetch and parse movies list from each page
+  """
   def fetch_and_parse_from_url(url) do
     body =
       case HTTPoison.get(url) do
@@ -81,6 +84,9 @@ defmodule SimpleCrawler do
         end).()
   end
 
+  @doc """
+    Fetch and parse detail of a movie
+  """
   def fetch_and_parse_page_movie(url) do
     IO.puts("Fetching #{url}")
     body =
@@ -144,8 +150,16 @@ defmodule SimpleCrawler do
     }
   end
 
+  @doc """
+    Example of movie status: "Tap 12/12 VIETSUB" or "N/A" or "Tap 16 VIETSUB"
+    This function is intended to parse movie status to determine `full_series` and `number_of_episode` value.
+    Assumption:
+      movie status "Tap 12/12 VIETSUB" -> full_series = true, number_of_episode = 12
+      movie status "Tap 10/12 VIETSUB" -> full_series = false, number_of_episode = 10
+      movie status "Tap 12 VIETSUB"    -> not enough info, fetch and parse watch movie page
+      movie status "N/A"               -> not enough info, fetch and parse watch movie page
+  """
   def parse_movie_status(status) do
-    # "tap 12/12 vietsub"
     #IO.puts("[debug] movie status #{status}")
     case String.split(status, " ")
          |> Enum.filter(fn x -> String.contains?(x, "/") end) do
@@ -174,6 +188,11 @@ defmodule SimpleCrawler do
     end
   end
 
+  @doc """
+    Fetch and parse watch movie page to figure number_of_episode
+    Some movies do not have any episodes
+    Assumption: cannot prove whether the movie has full series or not, so full_series = false
+  """
   def fetch_and_parse_watch_page(url) do
     IO.puts("Fetching #{url}")
     body =
@@ -193,7 +212,6 @@ defmodule SimpleCrawler do
 
     {:ok, document} = Floki.parse_document(body)
 
-    # assume: cannot prove whether the movie has full series or not
     case Floki.find(document, "#list_episodes") do
       [{"ul", _, list_episode}] ->
         %Movie{full_series: false, number_of_episode: length(list_episode)}
