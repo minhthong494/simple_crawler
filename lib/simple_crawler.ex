@@ -31,7 +31,7 @@ defmodule SimpleCrawler do
     File.write!("data.json", Poison.encode!(data), [:write])
   end
 
-  def start do
+  def start(max_page \\ 1000) do
     IO.puts("Starting ... ")
     start_ = DateTime.utc_now() |> DateTime.to_unix()
 
@@ -42,15 +42,10 @@ defmodule SimpleCrawler do
     current_time_formatted = "#{now.day}/#{now.month}/#{now.year} #{now.hour}:#{now.minute}:#{now.second}"
 
     items =
-      for page <- 1..@total_page do
+      for page <- 1..@total_page, page <= max_page do
         fetch_and_parse_from_url(@base_url <> "#{page}.html")
       end
       |> List.flatten()
-
-    end_ = DateTime.utc_now() |> DateTime.to_unix()
-    IO.puts("Finished in")
-    elap = end_ - start_
-    IO.puts("start: #{start_} end: #{end_} ellapsed: #{elap}")
 
     data = %{
       crawled_at: current_time_formatted,
@@ -58,9 +53,14 @@ defmodule SimpleCrawler do
       items: items
     }
 
-    file = File.open!("data.json", [:write])
-    IO.write(file, Poison.encode(data))
-    File.close(file)
+    File.write!("data.json", Poison.encode!(data), [:write])
+
+    IO.puts("-----------------------------")
+    IO.puts("Total items: #{data.total}")
+    IO.puts("Crawled at : #{data.crawled_at}")
+    end_ = DateTime.utc_now() |> DateTime.to_unix()
+    elap = end_ - start_
+    IO.puts("Complete in #{elap} seconds")
   end
 
   def fetch_and_parse_from_url(url) do
@@ -144,16 +144,6 @@ defmodule SimpleCrawler do
     }
   end
 
-  @spec parse_movie_status(binary) ::
-          nil
-          | %Data.Movie{
-              full_series: true,
-              link: <<>>,
-              number_of_episode: any,
-              thumnail: <<>>,
-              title: <<>>,
-              year: 0
-            }
   def parse_movie_status(status) do
     # "tap 12/12 vietsub"
     #IO.puts("[debug] movie status #{status}")
@@ -175,6 +165,8 @@ defmodule SimpleCrawler do
 
         if cur == total do
           %Movie{full_series: true, number_of_episode: total}
+        else
+          %Movie{full_series: false, number_of_episode: cur}
         end
 
       _ ->
