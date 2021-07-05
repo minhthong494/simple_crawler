@@ -31,7 +31,7 @@ defmodule SimpleCrawler do
     File.write!("data.json", Poison.encode!(data), [:write])
   end
 
-  def start(max_page \\ 1000) do
+  def start(max_page \\ @total_page) do
     IO.puts("Starting ... ")
     start_ = DateTime.utc_now() |> DateTime.to_unix()
 
@@ -42,9 +42,7 @@ defmodule SimpleCrawler do
     current_time_formatted = "#{now.day}/#{now.month}/#{now.year} #{now.hour}:#{now.minute}:#{now.second}"
 
     items =
-      for page <- 1..@total_page, page <= max_page do
-        fetch_and_parse_from_url(@base_url <> "#{page}.html")
-      end
+      Enum.map(1..max_page, fn page -> fetch_and_parse_from_url(@base_url <> "#{page}.html") end)
       |> List.flatten()
 
     data = %{
@@ -63,6 +61,8 @@ defmodule SimpleCrawler do
     IO.puts("Complete in #{elap} seconds")
   end
 
+
+
   @doc """
     Fetch and parse movies list from each page
   """
@@ -77,11 +77,7 @@ defmodule SimpleCrawler do
 
     Floki.find(document, "li.movie-item > a")
     |> Floki.attribute("href")
-    |> (fn urls ->
-          for url <- urls do
-            fetch_and_parse_page_movie(url)
-          end
-        end).()
+    |> (fn urls -> Enum.map(urls, fn url -> fetch_and_parse_page_movie(url) end) end).()
   end
 
   @doc """
@@ -108,15 +104,16 @@ defmodule SimpleCrawler do
 
     title = movie_detail |> Floki.find(".movie-title a.title-1") |> Floki.text()
 
-    year = case  movie_detail
+    year_str = movie_detail
     |> Floki.find(".movie-title .title-year")
     |> Floki.text()
     |> String.slice(2, 4)
-    |> Integer.parse(10) do
+
+
+    year = case year_str |> Integer.parse(10) do
       {year, _} -> year
       _ -> 0
     end
-
 
     watch_url =
       Floki.find(movie_image, "#btn-film-watch") |> Floki.attribute("href") |> Floki.text()
@@ -124,19 +121,15 @@ defmodule SimpleCrawler do
     status =
       movie_detail |> Floki.find(".movie-meta-info .movie-dl .movie-dd.status") |> Floki.text()
 
-    %Movie{full_series: is_full_series, number_of_episode: num_episode} =
+    %{full_series: is_full_series, number_of_episode: num_episode} =
       case parse_movie_status(status) do
-        %Movie{full_series: x, number_of_episode: y} ->
-          %Movie{full_series: x, number_of_episode: y}
-
-        nil ->
+        {:ok, res} -> res
+        :error ->
           case fetch_and_parse_watch_page(watch_url) do
-            %Movie{full_series: x, number_of_episode: y} ->
-              %Movie{full_series: x, number_of_episode: y}
-
-            nil ->
+            {:ok, res} -> res
+            :error ->
               IO.puts("fetch_and_parse_watch_page error")
-              %Movie{full_series: false, number_of_episode: 0}
+              %{full_series: false, number_of_episode: 0}
           end
       end
 
@@ -178,13 +171,13 @@ defmodule SimpleCrawler do
           end)
 
         if cur == total do
-          %Movie{full_series: true, number_of_episode: total}
+          {:ok, %{full_series: true, number_of_episode: total}}
         else
-          %Movie{full_series: false, number_of_episode: cur}
+          {:ok, %{full_series: false, number_of_episode: cur}}
         end
 
       _ ->
-        nil
+        :error
     end
   end
 
@@ -202,21 +195,25 @@ defmodule SimpleCrawler do
 
         "#" -> IO.puts("url is invalid: #{url}")
           ""
-
         _ ->
           case HTTPoison.get(url) do
             {:ok, %HTTPoison.Response{status_code: 200, body: body}} -> body
-            _ -> nil
+            _ -> IO.puts("Fetch data error #{url}")
+                 ""
           end
       end
 
-    {:ok, document} = Floki.parse_document(body)
+    document = case Floki.parse_document(body) do
+      {:ok, doc} -> doc
+      _ -> IO.puts("Parse document error ")
+           []
+    end
 
     case Floki.find(document, "#list_episodes") do
       [{"ul", _, list_episode}] ->
-        %Movie{full_series: false, number_of_episode: length(list_episode)}
+        {:ok, %{full_series: false, number_of_episode: length(list_episode)}}
       _ ->
-        nil
+        :error
     end
   end
 end
