@@ -4,7 +4,7 @@ defmodule SimpleCrawler do
   """
   alias Data.Movie
 
-  @base_url "https://phimmoii.net/the-loai/hoat-hinh/trang-"
+  @base_url "https://phimmoii.net/the-loai/hoat-hinh/"
   @total_page 87
   @doc """
   Hello world.
@@ -14,7 +14,7 @@ defmodule SimpleCrawler do
       iex> SimpleCrawler.hello()
       :world
   """
-  def write do
+  def test do
     now =
       DateTime.utc_now()
       |> DateTime.add(7 * 3600)
@@ -32,7 +32,20 @@ defmodule SimpleCrawler do
     File.write!("data.json", Poison.encode!(data), [:write])
   end
 
-  def start(max_page \\ @total_page) do
+  def crawl_from_url(max_page \\ @total_page, base_url \\ @base_url) do
+    start(max_page, base_url)
+  end
+
+  def crawl_and_write(max_page \\ @total_page, base_url \\ @base_url) do
+    start(max_page, base_url)
+    |> write()
+  end
+
+  def write(data, filename \\ "data.json") do
+    File.write!(filename, Poison.encode!(data), [:write])
+  end
+
+  def start(max_page \\ @total_page, base_url \\ @base_url) do
     IO.puts("Starting ... ")
     start_ = DateTime.utc_now() |> DateTime.to_unix()
 
@@ -46,7 +59,7 @@ defmodule SimpleCrawler do
 
     items =
       Enum.map(1..max_page, fn page ->
-        fetch_and_parse_document(@base_url <> "#{page}.html")
+        fetch_and_parse_document(base_url <> "trang-#{page}.html")
         |> parse_listing_page()
       end)
       |> List.flatten()
@@ -57,14 +70,14 @@ defmodule SimpleCrawler do
       items: items
     }
 
-    File.write!("data.json", Poison.encode!(data), [:write])
-
     IO.puts("-----------------------------")
     IO.puts("Total items: #{data.total}")
     IO.puts("Crawled at : #{data.crawled_at}")
     end_ = DateTime.utc_now() |> DateTime.to_unix()
     elap = end_ - start_
     IO.puts("Complete in #{elap} seconds")
+
+    data
   end
 
   def fetch_and_parse_document(url) do
