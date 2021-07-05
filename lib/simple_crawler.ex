@@ -13,14 +13,15 @@ defmodule SimpleCrawler do
 
       iex> SimpleCrawler.hello()
       :world
-
   """
   def write do
     now =
       DateTime.utc_now()
       |> DateTime.add(7 * 3600)
       |> DateTime.truncate(:second)
-    current_time_formatted = "#{now.day}/#{now.month}/#{now.year} #{now.hour}:#{now.minute}:#{now.second}"
+
+    current_time_formatted =
+      "#{now.day}/#{now.month}/#{now.year} #{now.hour}:#{now.minute}:#{now.second}"
 
     data = %{
       crawled_at: current_time_formatted,
@@ -39,10 +40,15 @@ defmodule SimpleCrawler do
       DateTime.utc_now()
       |> DateTime.add(7 * 3600)
       |> DateTime.truncate(:second)
-    current_time_formatted = "#{now.day}/#{now.month}/#{now.year} #{now.hour}:#{now.minute}:#{now.second}"
+
+    current_time_formatted =
+      "#{now.day}/#{now.month}/#{now.year} #{now.hour}:#{now.minute}:#{now.second}"
 
     items =
-      Enum.map(1..max_page, fn page -> fetch_and_parse_from_url(@base_url <> "#{page}.html") end)
+      Enum.map(1..max_page, fn page ->
+        fetch_and_parse_document(@base_url <> "#{page}.html")
+        |> parse_listing_page()
+      end)
       |> List.flatten()
 
     data = %{
@@ -61,38 +67,56 @@ defmodule SimpleCrawler do
     IO.puts("Complete in #{elap} seconds")
   end
 
+  def fetch_and_parse_document(url) do
+    IO.puts("Fetching #{url}")
 
-
-  @doc """
-    Fetch and parse movies list from each page
-  """
-  def fetch_and_parse_from_url(url) do
     body =
-      case HTTPoison.get(url) do
-        {:ok, %HTTPoison.Response{status_code: 200, body: body}} -> body
-        _ -> []
+      case url do
+        "#" ->
+          IO.puts("Invalid url: #{url}")
+
+        "" ->
+          IO.puts("Invalid url: empty")
+
+        _ ->
+          case HTTPoison.get(url) do
+            {:ok, %HTTPoison.Response{status_code: 200, body: body}} ->
+              body
+
+            _ ->
+              IO.puts("Fetch data error: url = #{url}")
+              []
+          end
       end
 
-    {:ok, document} = Floki.parse_document(body)
+    case Floki.parse_document(body) do
+      {:ok, doc} ->
+        doc
 
-    Floki.find(document, "li.movie-item > a")
-    |> Floki.attribute("href")
-    |> (fn urls -> Enum.map(urls, fn url -> fetch_and_parse_page_movie(url) end) end).()
+      _ ->
+        IO.puts("Parse document error: #{url}")
+        []
+    end
   end
 
   @doc """
-    Fetch and parse detail of a movie
+    Parse movies listing page
   """
-  def fetch_and_parse_page_movie(url) do
-    IO.puts("Fetching #{url}")
-    body =
-      case HTTPoison.get(url) do
-        {:ok, %HTTPoison.Response{status_code: 200, body: body}} -> body
-        _ -> nil
-      end
+  def parse_listing_page(document) do
+    Floki.find(document, "li.movie-item > a")
+    |> Floki.attribute("href")
+    |> (fn urls ->
+          Enum.map(urls, fn url ->
+            fetch_and_parse_document(url)
+            |> parse_movie_page(url)
+          end)
+        end).()
+  end
 
-    {:ok, document} = Floki.parse_document(body)
-
+  @doc """
+    Parse detail of a movie and extract detail info
+  """
+  def parse_movie_page(document, url) do
     movie_image = Floki.find(document, ".movie-info .movie-image")
 
     thumnail_url =
@@ -104,16 +128,17 @@ defmodule SimpleCrawler do
 
     title = movie_detail |> Floki.find(".movie-title a.title-1") |> Floki.text()
 
-    year_str = movie_detail
-    |> Floki.find(".movie-title .title-year")
-    |> Floki.text()
-    |> String.slice(2, 4)
+    year_str =
+      movie_detail
+      |> Floki.find(".movie-title .title-year")
+      |> Floki.text()
+      |> String.slice(2, 4)
 
-
-    year = case year_str |> Integer.parse(10) do
-      {year, _} -> year
-      _ -> 0
-    end
+    year =
+      case year_str |> Integer.parse(10) do
+        {year, _} -> year
+        _ -> 0
+      end
 
     watch_url =
       Floki.find(movie_image, "#btn-film-watch") |> Floki.attribute("href") |> Floki.text()
@@ -123,10 +148,14 @@ defmodule SimpleCrawler do
 
     %{full_series: is_full_series, number_of_episode: num_episode} =
       case parse_movie_status(status) do
-        {:ok, res} -> res
+        {:ok, res} ->
+          res
+
         :error ->
-          case fetch_and_parse_watch_page(watch_url) do
-            {:ok, res} -> res
+          case fetch_and_parse_document(watch_url) |> parse_watch_page do
+            {:ok, res} ->
+              res
+
             :error ->
               IO.puts("fetch_and_parse_watch_page error")
               %{full_series: false, number_of_episode: 0}
@@ -153,14 +182,13 @@ defmodule SimpleCrawler do
       movie status "N/A"               -> not enough info, fetch and parse watch movie page
   """
   def parse_movie_status(status) do
-    #IO.puts("[debug] movie status #{status}")
+    # IO.puts("[debug] movie status #{status}")
     case String.split(status, " ")
          |> Enum.filter(fn x -> String.contains?(x, "/") end) do
       [value] when value != "N/A" ->
         [cur, total] =
           String.split(value, "/")
           |> Enum.map(fn x ->
-
             digits =
               String.codepoints(x)
               |> Enum.filter(fn c -> c >= "0" and c <= "9" end)
@@ -182,36 +210,15 @@ defmodule SimpleCrawler do
   end
 
   @doc """
-    Fetch and parse watch movie page to figure number_of_episode
+    Parse watch movie page to figure out number_of_episode
     Some movies do not have any episodes
     Assumption: cannot prove whether the movie has full series or not, so full_series = false
   """
-  def fetch_and_parse_watch_page(url) do
-    IO.puts("Fetching #{url}")
-    body =
-      case url do
-        "" -> IO.puts("url is invalid: #{url}")
-          ""
-
-        "#" -> IO.puts("url is invalid: #{url}")
-          ""
-        _ ->
-          case HTTPoison.get(url) do
-            {:ok, %HTTPoison.Response{status_code: 200, body: body}} -> body
-            _ -> IO.puts("Fetch data error #{url}")
-                 ""
-          end
-      end
-
-    document = case Floki.parse_document(body) do
-      {:ok, doc} -> doc
-      _ -> IO.puts("Parse document error ")
-           []
-    end
-
+  def parse_watch_page(document) do
     case Floki.find(document, "#list_episodes") do
       [{"ul", _, list_episode}] ->
         {:ok, %{full_series: false, number_of_episode: length(list_episode)}}
+
       _ ->
         :error
     end
