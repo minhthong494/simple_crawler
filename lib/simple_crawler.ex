@@ -24,7 +24,7 @@ defmodule SimpleCrawler do
       "#{now.day}/#{now.month}/#{now.year} #{now.hour}:#{now.minute}:#{now.second}"
 
     data = %{
-      crawled_at: current_time_formatted,
+      crawl_at: current_time_formatted,
       total: 0,
       items: [%{a: 123, b: 456}]
     }
@@ -73,7 +73,7 @@ defmodule SimpleCrawler do
 
     IO.puts("-----------------------------")
     IO.puts("Total items: #{data.total}")
-    IO.puts("Crawled at : #{data.crawled_at}")
+    IO.puts("Crawled at : #{data.crawl_at}")
     end_ = DateTime.utc_now() |> DateTime.to_unix()
     elap = end_ - start_
     IO.puts("Complete in #{elap} seconds")
@@ -123,7 +123,8 @@ defmodule SimpleCrawler do
           Enum.map(urls, fn url ->
             fetch_and_parse_document(url)
             |> parse_movie_page(url)
-        end).()
+        end)
+      end).()
   end
 
   @doc """
