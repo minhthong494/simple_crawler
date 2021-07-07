@@ -59,12 +59,13 @@ defmodule SimpleCrawler do
 
     items =
       Enum.map(1..max_page, fn page ->
-        fetch_and_parse_document(base_url <> "trang-#{page}.html")
+        fetch_and_parse_document(String.trim_trailing(base_url, ".html") <> "/trang-#{page}.html")
         |> parse_listing_page()
       end)
       |> List.flatten()
 
     data = %{
+      url: base_url,
       crawl_at: DateTime.to_unix(now),
       total: length(items),
       items: items,
