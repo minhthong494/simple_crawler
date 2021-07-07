@@ -65,9 +65,10 @@ defmodule SimpleCrawler do
       |> List.flatten()
 
     data = %{
-      crawled_at: current_time_formatted,
+      crawl_at: current_time_formatted,
       total: length(items),
-      items: items
+      items: items,
+      status: "success"
     }
 
     IO.puts("-----------------------------")
@@ -122,7 +123,6 @@ defmodule SimpleCrawler do
           Enum.map(urls, fn url ->
             fetch_and_parse_document(url)
             |> parse_movie_page(url)
-          end)
         end).()
   end
 
