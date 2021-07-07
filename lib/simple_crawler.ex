@@ -51,11 +51,11 @@ defmodule SimpleCrawler do
 
     now =
       DateTime.utc_now()
-      |> DateTime.add(7 * 3600)
-      |> DateTime.truncate(:second)
+      # |> DateTime.add(7 * 3600)
+      # |> DateTime.truncate(:second)
 
-    current_time_formatted =
-      "#{now.day}/#{now.month}/#{now.year} #{now.hour}:#{now.minute}:#{now.second}"
+    # current_time_formatted =
+    #   "#{now.day}/#{now.month}/#{now.year} #{now.hour}:#{now.minute}:#{now.second}"
 
     items =
       Enum.map(1..max_page, fn page ->
@@ -65,7 +65,7 @@ defmodule SimpleCrawler do
       |> List.flatten()
 
     data = %{
-      crawl_at: current_time_formatted,
+      crawl_at: DateTime.to_unix(now),
       total: length(items),
       items: items,
       status: "success"
