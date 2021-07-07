@@ -68,7 +68,7 @@ defmodule SimpleCrawler do
       url: base_url,
       crawl_at: DateTime.to_unix(now),
       total: length(items),
-      items: items,
+      movies: items,
       status: "success"
     }
 
