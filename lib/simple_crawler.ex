@@ -163,21 +163,15 @@ defmodule SimpleCrawler do
 
     directors =
       movie_detail |> Floki.find(".movie-meta-info .movie-dl .movie-dd.dd-director")
-      |> IO.inspect()
       |> Floki.text()
       |> String.split(",")
-      |> IO.inspect()
       |> Enum.filter(& &1 != "" && !String.contains?(&1, "N/A"))
-      |> IO.inspect()
 
     countries =
       movie_detail |> Floki.find(".movie-meta-info .movie-dl .movie-dd.dd-country")
       |> Floki.text()
-      |> IO.inspect()
       |> String.split(",")
-      |> IO.inspect()
       |> Enum.filter(& &1 != "")
-      |> IO.inspect()
 
     %{full_series: is_full_series, number_of_episode: num_episode} =
       case parse_movie_status(status) do
